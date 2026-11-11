@@ -1,0 +1,62 @@
+name: android test apk
+# Builds this branch as the arm64 test APK (ANDROID.md), under the side-by-side
+# package dev.horizonlab.horizon.kbtest: it installs beside a regular Horizon
+# without touching its files or signature. For testing the physical keyboard
+# fix (#18, #17) on real hardware.
+on:
+  push:
+    branches: [android-kbtest-build]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/emulator /opt/ghc /usr/local/.ghcup || true
+          rm -rf "$ANDROID_HOME"/ndk/* || true
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: The pinned NDK, platform and build tools (ANDROID.md)
+        run: |
+          (yes | sdkmanager --licenses >/dev/null) || true
+          sdkmanager --install "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" >/dev/null
+
+      - name: cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: The side-by-side package (dev.horizonlab.horizon.kbtest)
+        run: |
+          sed -i 's/package="dev.horizonlab.horizon"/package="dev.horizonlab.horizon.kbtest"/' packaging/android/AndroidManifest.xml
+          sed -i 's/android:name="\.\([A-Za-z]*"\)/android:name="dev.horizonlab.horizon.\1/' packaging/android/AndroidManifest.xml
+          sed -i 's/dev.horizonlab\.horizon\.documents/dev.horizonlab.horizon.kbtest.documents/' \
+            packaging/android/AndroidManifest.xml packaging/android/java/dev/horizonlab/horizon/HorizonActivity.java
+          sed -i 's/android:versionCode="36"/android:versionCode="99"/' packaging/android/AndroidManifest.xml
+          sed -i 's/android:versionName="0.4.5"/android:versionName="0.4.5-kbtest"/' packaging/android/AndroidManifest.xml
+          sed -i 's|<string name="app_name">Horizon</string>|<string name="app_name">Horizon KB Test</string>|' packaging/android/res/values/strings.xml
+          grep -n 'package=\|versionCode\|versionName\|authorities' packaging/android/AndroidManifest.xml | head -4
+
+      - name: Build the APK
+        run: PROFILE=fast bash packaging/android/build_apk.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: horizon-kbtest-apk
+          path: target/android/horizon.apk
+          if-no-files-found: error
+          retention-days: 14
