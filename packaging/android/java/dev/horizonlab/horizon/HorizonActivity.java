@@ -34,6 +34,8 @@ public class HorizonActivity extends NativeActivity {
     static native void nativeImeInset(int px);
 
     private TextSink sink;
+    /** True while the game wants the soft keyboard (set before Toggle runs). */
+    private volatile boolean keyboardWanted;
     private volatile boolean quitting;
 
     @Override
@@ -72,6 +74,17 @@ public class HorizonActivity extends NativeActivity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) hideSystemBars();
+        // A focus traversal can hand the sink the focus back outside Toggle (a
+        // window focus regain, a configuration change: a physical keyboard
+        // attaching). A focused editor routes every key through the IME instead
+        // of the input queue, so with a keyboard attached the player could not
+        // move (#18). While the game does not want the keyboard, the sink stays
+        // inert; only showKeyboard makes it focusable again.
+        if (hasFocus && !keyboardWanted && sink != null) {
+            sink.clearFocus();
+            sink.setFocusable(false);
+            sink.setFocusableInTouchMode(false);
+        }
     }
 
     /** Full screen: the navigation and status bars stay hidden; a swipe from the edge shows them for a moment. */
@@ -235,6 +248,7 @@ public class HorizonActivity extends NativeActivity {
 
     /** Called from the game thread while a text field has the focus. */
     public void showKeyboard(final boolean show) {
+        keyboardWanted = show;
         runOnUiThread(new Toggle(this, show));
     }
 
@@ -259,7 +273,14 @@ public class HorizonActivity extends NativeActivity {
                     imm.showSoftInput(sink, InputMethodManager.SHOW_FORCED);
                 } else {
                     imm.hideSoftInputFromWindow(sink.getWindowToken(), 0);
+                    // Inert for good, not just unfocused: while it stays
+                    // focusable, the IME keeps its connection to it and a focus
+                    // traversal can re-focus it, which routes a physical
+                    // keyboard's keys to the IME instead of the game's input
+                    // queue (#18).
                     sink.clearFocus();
+                    sink.setFocusable(false);
+                    sink.setFocusableInTouchMode(false);
                 }
             }
         }

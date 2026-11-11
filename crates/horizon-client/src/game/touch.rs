@@ -453,6 +453,10 @@ pub(super) struct Touches {
     pub(super) mouse: bool,
     /// The pointer capture last asked for.
     pub(super) pointer_captured: Option<bool>,
+    /// Physical keys the IME delivered as text (an editor view held the focus,
+    /// #18): the value is when the last one arrived. `android_input_frame`
+    /// releases them once the repeats stop: that path has no key-up.
+    pub(super) ime_keys: HashMap<KeyCode, Instant>,
 }
 
 impl Default for Touches {
@@ -479,6 +483,7 @@ impl Default for Touches {
             hardware: false,
             mouse: false,
             pointer_captured: None,
+            ime_keys: HashMap::new(),
             buttons: if cfg!(target_os = "android") { load_buttons() } else { Vec::new() },
             selected_button: None,
         }
@@ -1155,6 +1160,23 @@ impl Game<'_> {
                 ImeInput::Backspace => osk::Output::Backspace,
                 ImeInput::Enter => osk::Output::Enter,
             });
+        }
+    }
+
+    /// A key the IME delivered as text (#18): true when it is a new press.
+    /// It stays held while its repeats keep it fresh; `android_input_frame`
+    /// releases it a while after the last one (that path has no key-up).
+    #[cfg(target_os = "android")]
+    pub(super) fn ime_key(&mut self, key: KeyCode) -> bool {
+        match self.touch.ime_keys.entry(key) {
+            std::collections::hash_map::Entry::Vacant(v) => {
+                v.insert(Instant::now());
+                true
+            }
+            std::collections::hash_map::Entry::Occupied(mut o) => {
+                *o.get_mut() = Instant::now();
+                false
+            }
         }
     }
 

@@ -2296,6 +2296,8 @@ impl Game<'_> {
                 Some(KeyCode::Backspace) => self.title_edit(None, true),
                 _ => self.title_edit(text, false),
             }
+        } else {
+            self.osk_unwanted(key, text);
         }
         // Enter ends the typing, but for a dialog's new line; a field that
         // closed with it closes the keyboard.
@@ -2306,6 +2308,31 @@ impl Game<'_> {
         {
             self.pad.menu.osk = None;
         }
+    }
+
+    /// On-screen keyboard output no screen or field wanted. On the desktop
+    /// that is all it is; on Android it is also the keys of a physical
+    /// keyboard the IME delivered as text while an editor view held the
+    /// focus (#18): press them as the keyboard's own, held while their
+    /// repeats keep arriving (`android_input_frame` releases them; this path
+    /// has no key-up).
+    fn osk_unwanted(&mut self, key: Option<KeyCode>, text: Option<&str>) {
+        #[cfg(target_os = "android")]
+        {
+            let mut keys = Vec::new();
+            if let Some(t) = text {
+                keys.extend(t.chars().filter_map(super::android_ime::ime_char_key));
+            } else if let Some(key) = key {
+                keys.push(key);
+            }
+            for key in keys {
+                if self.ime_key(key) {
+                    self.ime_key_event(key, true);
+                }
+            }
+        }
+        #[cfg(not(target_os = "android"))]
+        let _ = (key, text);
     }
 
     // ---- drawing ----

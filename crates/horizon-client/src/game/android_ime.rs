@@ -3,6 +3,7 @@
 //! `nativeText`/`nativeKey`, which queue them for the game thread; the game
 //! asks for the keyboard with `show`.
 use std::sync::Mutex;
+use winit::keyboard::KeyCode;
 
 pub(super) enum ImeInput {
     Text(String),
@@ -175,4 +176,31 @@ extern "system" fn Java_dev_horizonlab_horizon_HorizonActivity_nativeImeInset(
 /// The soft keyboard's height in window pixels, 0 when hidden.
 pub(super) fn ime_inset() -> f32 {
     IME_INSET.load(std::sync::atomic::Ordering::Relaxed) as f32
+}
+
+/// A gameplay key the character stands for: while an editor view held the
+/// focus the IME delivers a physical keyboard's keys as text (#18), so text
+/// with no field to type into is keys. The ASCII that has a key; a text the
+/// IME composed (any script) stays None.
+pub(super) fn ime_char_key(c: char) -> Option<KeyCode> {
+    const LETTERS: [KeyCode; 26] = [
+        KeyCode::KeyA, KeyCode::KeyB, KeyCode::KeyC, KeyCode::KeyD, KeyCode::KeyE,
+        KeyCode::KeyF, KeyCode::KeyG, KeyCode::KeyH, KeyCode::KeyI, KeyCode::KeyJ,
+        KeyCode::KeyK, KeyCode::KeyL, KeyCode::KeyM, KeyCode::KeyN, KeyCode::KeyO,
+        KeyCode::KeyP, KeyCode::KeyQ, KeyCode::KeyR, KeyCode::KeyS, KeyCode::KeyT,
+        KeyCode::KeyU, KeyCode::KeyV, KeyCode::KeyW, KeyCode::KeyX, KeyCode::KeyY,
+        KeyCode::KeyZ,
+    ];
+    const DIGITS: [KeyCode; 10] = [
+        KeyCode::Digit0, KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3, KeyCode::Digit4,
+        KeyCode::Digit5, KeyCode::Digit6, KeyCode::Digit7, KeyCode::Digit8, KeyCode::Digit9,
+    ];
+    let c = c.to_ascii_lowercase();
+    Some(match c {
+        'a'..='z' => LETTERS[(c as u8 - b'a') as usize],
+        '0'..='9' => DIGITS[(c as u8 - b'0') as usize],
+        ' ' => KeyCode::Space,
+        '/' => KeyCode::Slash,
+        _ => return None,
+    })
 }

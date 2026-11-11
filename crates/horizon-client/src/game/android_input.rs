@@ -7,10 +7,17 @@
 //! cursor, deadzones). Mouse events are queued for the game thread
 //! (`Game::android_input_frame`). Keyboard keys stay with winit, which already
 //! maps them to the physical keys the game handles; they are only noted so the
-//! touch controls can hide.
+//! touch controls can hide. The keys the IME delivers as text while an editor
+//! view holds the focus (#18) come back as presses here too: they are held
+//! until their repeats stop ([`IME_KEY_HOLD`]), as that path has no key-up.
 use horizon_client::gamepad::{Button, PadState};
 use std::sync::Mutex;
+use winit::keyboard::KeyCode;
 use winit::platform::android::activity::input::{Axis, InputEvent, KeyAction, Keycode, MotionAction};
+
+/// How long a key the IME delivered as text stays held after its last repeat
+/// (#18): the IME has no key-up, so the key releases once the repeats stop.
+const IME_KEY_HOLD: std::time::Duration = std::time::Duration::from_millis(600);
 
 /// `InputDevice.SOURCE_*` bits.
 const SOURCE_KEYBOARD: u32 = 0x0000_0101;
@@ -408,11 +415,40 @@ impl super::Game<'_> {
             };
             self.handle_window_event(event_loop, window_id, event, super::input_trace::InputOrigin::User);
         }
+        // The keys the IME delivered as text (#18) release once their repeats
+        // stop: that path has no key-up.
+        let now = std::time::Instant::now();
+        let expired: Vec<KeyCode> = self
+            .touch
+            .ime_keys
+            .iter()
+            .filter(|(_, last)| now.duration_since(**last) >= IME_KEY_HOLD)
+            .map(|(key, _)| *key)
+            .collect();
+        for key in expired {
+            self.touch.ime_keys.remove(&key);
+            self.ime_key_event(key, false);
+        }
         // The pointer is captured for turning the view, and let go in menus.
         let capture = self.touch.mouse && self.focused && self.player.is_some() && !self.pad_in_menu();
         if self.touch.pointer_captured != Some(capture) {
             self.touch.pointer_captured = Some(capture);
             super::android_ime::pointer_capture(capture);
+        }
+    }
+
+    /// A key press the IME delivered as text while an editor view held the
+    /// focus (#18): applied as the keyboard's own, minus the layout learning
+    /// (there is no key event to learn from).
+    pub(super) fn ime_key_event(&mut self, key: KeyCode, pressed: bool) {
+        if pressed {
+            self.physical_keys.insert(key);
+        } else {
+            self.physical_keys.remove(&key);
+        }
+        self.native_key_event(key, pressed, false);
+        if let Err(e) = self.mapped_key_event(key, pressed, false) {
+            log::warn!("Horizon: IME key: {e}");
         }
     }
 }
