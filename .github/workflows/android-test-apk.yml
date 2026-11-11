@@ -15,11 +15,15 @@ jobs:
     timeout-minutes: 90
     env:
       ANDROID_HOME: /home/runner/android-sdk
+      # cargo-ndk looks here before ANDROID_HOME; the runner image presets these
+      # at its own half-removed SDK.
+      ANDROID_NDK_HOME: /home/runner/android-sdk/ndk/27.2.12479018
+      ANDROID_NDK_ROOT: /home/runner/android-sdk/ndk/27.2.12479018
+      NDK_HOME: /home/runner/android-sdk/ndk/27.2.12479018
     steps:
       - name: Free disk space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/emulator /opt/ghc /usr/local/.ghcup || true
-          rm -rf /usr/local/lib/android/sdk/ndk/* || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/emulator /usr/local/lib/android/sdk/ndk /opt/ghc /usr/local/.ghcup || true
 
       - uses: actions/checkout@v4
 
