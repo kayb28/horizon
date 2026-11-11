@@ -62,6 +62,17 @@ public class SetupActivity extends Activity
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         home = home(this);
+        // The phone's language, noted for the game's first run: android_main.rs
+        // hands it to Settings::load as HORIZON_PHONE_LOCALE, which takes it as
+        // the first start's lang (vanilla's own default is always en_us).
+        try {
+            java.io.FileOutputStream out = openFileOutput("phone-locale.txt", MODE_PRIVATE);
+            out.write((java.util.Locale.getDefault().getLanguage() + "-"
+                    + java.util.Locale.getDefault().getCountry())
+                    .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            out.close();
+        } catch (java.io.IOException ignored) {
+        }
         if (nativeReady(home) == 1) {
             launch();
             return;

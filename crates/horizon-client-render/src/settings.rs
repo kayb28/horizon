@@ -395,7 +395,11 @@ impl Settings {
         settings.keys.set("key.emote", &emote);
         // Only the first start's defaults: what the player sets afterwards stays.
         #[cfg(target_os = "android")]
-        let settings = if first_run { settings.fit_phone() } else { settings };
+        let settings = if first_run {
+            settings.fit_phone().phone_language()
+        } else {
+            settings
+        };
         #[cfg(not(target_os = "android"))]
         let _ = first_run;
         settings.describe_for_crashes();
@@ -430,6 +434,72 @@ impl Settings {
             self.horizon.workers = 2;
         }
         self
+    }
+
+    /// The first start's language is the phone's, not vanilla's always-`en_us`
+    /// default: the player already told the phone what they read. Only codes
+    /// with a language file are picked, so an unknown locale stays English.
+    #[cfg(target_os = "android")]
+    fn phone_language(mut self) -> Self {
+        if let Some(code) = Self::phone_language_code() {
+            log::info!("Horizon: first start, the phone's language {code}");
+            self.language = code;
+        }
+        self
+    }
+
+    /// The game language for the phone's locale (`phone_language`), or None
+    /// when it says nothing the game has strings for.
+    #[cfg(target_os = "android")]
+    fn phone_language_code() -> Option<String> {
+        let locale = Self::phone_locale()?; // e.g. "es-AR", "pt-BR", "en-US"
+        let (lang, region) = match locale.split_once('-') {
+            Some((lang, region)) => (lang, region),
+            None => (locale.as_str(), ""),
+        };
+        let lang = lang.to_ascii_lowercase();
+        let region = region.to_ascii_lowercase();
+        // The language codes with a file in this build: vanilla's own list
+        // (the asset index's languages) with Horizon's strings bundled over it.
+        const CODES: &[&str] = &[
+            "af_za", "ar_sa", "az_az", "ba_ru", "be_by", "bg_bg", "br_fr", "bs_ba", "ca_es",
+            "cs_cz", "cv_cu", "cy_gb", "da_dk", "de_de", "el_gr", "en_us", "eo_uy", "es_es",
+            "et_ee", "eu_es", "fa_ir", "fi_fi", "fil_ph", "fo_fo", "fr_fr", "fur_it", "fy_nl",
+            "ga_ie", "gd_gb", "gl_es", "haw_us", "he_il", "hi_in", "hr_hr", "hu_hu", "hy_am",
+            "id_id", "ig_ng", "is_is", "it_it", "ja_jp", "ka_ge", "kk_kz", "kn_in", "ko_kr",
+            "ky_kg", "la_la", "lb_lu", "li_li", "lmo", "lo_la", "lt_lt", "lv_lv", "mk_mk",
+            "mn_mn", "ms_my", "mt_mt", "nl_nl", "no_no", "oc_fr", "pl_pl", "pt_br", "pt_pt",
+            "ro_ro", "ru_ru", "sah_sah", "se_no", "sk_sk", "sl_si", "so_so", "sq_al", "sr_cs",
+            "sr_sp", "sv_se", "szl", "ta_in", "th_th", "tr_tr", "tt_ru", "uk_ua", "ur_pk",
+            "uz_uz", "vec_it", "vi_vn", "yi_de", "yo_ng", "zh_cn",
+        ];
+        let exact = format!("{lang}_{region}");
+        if CODES.contains(&exact.as_str()) {
+            return Some(exact);
+        }
+        // Variants the game has one file for, whatever the region says.
+        match lang.as_str() {
+            "es" => return Some("es_es".into()),
+            "zh" => return Some("zh_cn".into()),
+            "pt" => return Some((if region == "br" { "pt_br" } else { "pt_pt" }).into()),
+            "sr" => return Some("sr_cs".into()),
+            _ => {}
+        }
+        // One file for the language: the phone named no region, or one it has
+        // no strings for (en-GB -> en_us).
+        let mut same: Vec<&str> = CODES.iter().copied().filter(|c| c.starts_with(&format!("{lang}_"))).collect();
+        if same.len() == 1 {
+            return Some(same.remove(0).into());
+        }
+        None
+    }
+
+    /// The phone's locale, noted by the setup screen (`phone-locale.txt` in
+    /// internal storage) and handed over as `HORIZON_PHONE_LOCALE` by
+    /// `android_main.rs`: "es-AR" style. None when the phone said nothing.
+    #[cfg(target_os = "android")]
+    fn phone_locale() -> Option<String> {
+        std::env::var("HORIZON_PHONE_LOCALE").ok().filter(|s| !s.is_empty())
     }
 }
 

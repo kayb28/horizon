@@ -33,6 +33,15 @@ fn android_main(app: AndroidApp) {
         std::env::set_var("HOME", &home);
         if let Some(internal) = app.internal_data_path() {
             std::env::set_var("HORIZON_CACHE", internal.join("horizon-cache"));
+            // The setup screen's note of the phone's language ("es-AR" style):
+            // Settings::load takes it as the first start's lang (vanilla's own
+            // default is always en_us).
+            if let Ok(tag) = std::fs::read_to_string(internal.join("phone-locale.txt")) {
+                let tag = tag.trim();
+                if !tag.is_empty() {
+                    std::env::set_var("HORIZON_PHONE_LOCALE", tag);
+                }
+            }
         }
         std::env::set_var("TMPDIR", app.internal_data_path().unwrap_or(home.clone()).join("tmp"));
         // `spikes.txt` in the game folder (a number of milliseconds) turns on HORIZON_SPIKES:
