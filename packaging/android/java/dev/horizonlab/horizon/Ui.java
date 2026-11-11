@@ -33,7 +33,8 @@ final class Ui {
     }
 
     static String t(String ru, String en) {
-        return ru() ? ru : en;
+        if (ru()) return ru;
+        return Es.of(en);
     }
 
     static int dp(Context c, float v) {
