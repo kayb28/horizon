@@ -13,11 +13,13 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      ANDROID_HOME: /home/runner/android-sdk
     steps:
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/emulator /opt/ghc /usr/local/.ghcup || true
-          rm -rf "$ANDROID_HOME"/ndk/* || true
+          rm -rf /usr/local/lib/android/sdk/ndk/* || true
 
       - uses: actions/checkout@v4
 
@@ -32,10 +34,17 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: The pinned NDK, platform and build tools (ANDROID.md)
+      - name: An SDK of our own (the runner image's has no sdkmanager on PATH)
         run: |
-          (yes | sdkmanager --licenses >/dev/null) || true
-          sdkmanager --install "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" >/dev/null
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -sSfL -o /tmp/ct.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q /tmp/ct.zip -d "$ANDROID_HOME/ct"
+          mv "$ANDROID_HOME/ct/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          rmdir "$ANDROID_HOME/ct"
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          (yes | "$SDKM" --licenses >/dev/null) || true
+          "$SDKM" --install "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" >/dev/null
+          df -h / | tail -1
 
       - name: cargo-ndk
         run: cargo install cargo-ndk --locked
