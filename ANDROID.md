@@ -66,7 +66,12 @@ folder is used instead (reachable only with `adb shell run-as` on a debug build)
   next hotbar slot, use/place, attack/break, then at the bottom jump (outermost) and sneak.
   They go through the virtual controller, so they follow the controller bindings (`horizon-controller.txt`).
 - **Keyboard** (USB/Bluetooth) arrives through winit like on desktop (WASD, Esc, F-keys, typing into
-  text fields). The system Back key closes a screen or pauses; it never leaves the game.
+  text fields). The system Back key closes a screen or pauses; it never leaves the game. The soft
+  keyboard's hidden view (`HorizonActivity`) is only focusable while the soft keyboard is shown: an
+  editor holding the focus routes a physical keyboard's keys through the IME instead of the input
+  queue, so the player could not move (#18). Keys the IME still delivers as text while no text field
+  has the focus are pressed as the keys they are, held until the repeats stop (that path has no
+  key-up; `android_input_frame` releases them).
 - **Mouse:** clicks, wheel and the pointer go to the game as on desktop. While playing, the pointer is
   captured (`View.requestPointerCapture`) and turns the view; menus release it.
 - **Gamepads:** gilrs has no Android backend, so `src/game/android_input.rs` reads the activity's own
